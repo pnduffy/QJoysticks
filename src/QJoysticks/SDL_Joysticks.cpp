@@ -166,17 +166,17 @@ void SDL_Joysticks::update()
             emit countChanged();
             break;
          case SDL_JOYAXISMOTION:
-            if (!SDL_IsGameController(event.cdevice.which))
-            {
-               emit axisEvent(getAxisEvent(&event));
-            }
-            break;
-         case SDL_CONTROLLERAXISMOTION:
             if (SDL_IsGameController(event.cdevice.which))
             {
                emit axisEvent(getAxisEvent(&event));
             }
             break;
+//         case SDL_CONTROLLERAXISMOTION:
+//            if (SDL_IsGameController(event.cdevice.which))
+//            {
+//               emit axisEvent(getAxisEvent(&event));
+//            }
+//            break;
          case SDL_JOYBUTTONUP:
             emit buttonEvent(getButtonEvent(&event));
             break;

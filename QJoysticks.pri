@@ -32,13 +32,15 @@ HEADERS += \
     $$PWD/src/QJoysticks/JoysticksCommon.h \
     $$PWD/src/QJoysticks/SDL_Joysticks.h \
     $$PWD/src/QJoysticks/VirtualJoystick.h \
-    $$PWD/src/QJoysticks/Android_Joystick.h
+    $$PWD/src/QJoysticks/Android_Joystick.h \
+    $$PWD/src/qsocketthreadworker.h
 
 SOURCES += \
     $$PWD/src/QJoysticks.cpp \
     $$PWD/src/QJoysticks/SDL_Joysticks.cpp \
     $$PWD/src/QJoysticks/VirtualJoystick.cpp \
-    $$PWD/src/QJoysticks/Android_Joystick.cpp
+    $$PWD/src/QJoysticks/Android_Joystick.cpp \
+    $$PWD/src/qsocketthreadworker.cpp
 
 RESOURCES += \
     $$PWD/etc/resources/qjoysticks-res.qrc

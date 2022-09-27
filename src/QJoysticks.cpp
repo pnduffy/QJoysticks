@@ -25,6 +25,7 @@
 #include <QJoysticks.h>
 #include <QJoysticks/SDL_Joysticks.h>
 #include <QJoysticks/VirtualJoystick.h>
+#include <qsocketthreadworker.h>
 
 QJoysticks::QJoysticks()
 {
@@ -51,12 +52,39 @@ QJoysticks::QJoysticks()
 
    /* Configure the settings */
    m_sortJoyticks = 0;
-   m_settings = new QSettings(qApp->organizationName(), qApp->applicationName());
-   m_settings->beginGroup("Blacklisted Joysticks");
+   m_settings = new QSettings("FA-Tools","QJoysticks");
+   for (int switchNum=0; switchNum<m_gNumSwitches; switchNum++) m_switchState[switchNum]=false;
+
+   QSocketThreadWorker *worker = new QSocketThreadWorker;
+   worker->moveToThread(&socketWorkerThread);
+   connect(&socketWorkerThread, &QThread::finished, worker, &QObject::deleteLater);
+   connect(this, &QJoysticks::openSocket, worker, &QSocketThreadWorker::open);
+   connect(this, &QJoysticks::updateSocket, worker, &QSocketThreadWorker::update);
+   connect(worker, &QSocketThreadWorker::statusMsg, this, &QJoysticks::handleStatusMsg);
+   connect(this, &QJoysticks::hostNameChanged, this, &QJoysticks::onHostNameChanged);
+   connect(worker, &QSocketThreadWorker::stateChanged, this, &QJoysticks::onSocketStateChanged);
+   connect(&m_socketUpdateTimer, &QTimer::timeout, this, &QJoysticks::onSocketUpdate);
+   m_hostName = m_settings->value("Hostname", "").toString();
+   socketWorkerThread.start();
+
+   if (!m_hostName.isEmpty())
+   {
+       onHostNameChanged(m_hostName);
+   }
+
+   // Set update to 50hz
+   m_socketUpdateTimer.setInterval(5);
+   m_socketUpdateTimer.start();
 }
 
 QJoysticks::~QJoysticks()
 {
+    if (socketWorkerThread.isRunning())
+    {
+        socketWorkerThread.quit();
+        socketWorkerThread.wait();
+    }
+
    delete m_settings;
    delete m_sdlJoysticks;
    delete m_virtualJoystick;
@@ -113,6 +141,37 @@ QStringList QJoysticks::deviceNames() const
    return names;
 }
 
+QString QJoysticks::getHostName()
+{
+    m_hostName = m_settings->value("Hostname", "").toString();
+    return m_hostName;
+}
+
+void QJoysticks::setHostName(QString name)
+{
+    if (m_hostName!=name)
+    {
+        m_settings->setValue("Hostname",name);
+        m_settings->sync();
+        m_hostName = name;
+        emit hostNameChanged(m_hostName);
+    }
+}
+
+bool QJoysticks::getSocketOpen()
+{
+    return m_socketOpen;
+}
+
+void QJoysticks::setSocketOpen(bool val)
+{
+    if (m_socketOpen!=val)
+    {
+        m_socketOpen = val;
+        emit socketOpenChanged(m_socketOpen);
+    }
+}
+
 /**
  * Returns the POV value for the given joystick \a index and \a pov ID
  */
@@ -130,8 +189,9 @@ int QJoysticks::getPOV(const int index, const int pov)
 double QJoysticks::getAxis(const int index, const int axis)
 {
    if (joystickExists(index))
+   {
       return getInputDevice(index)->axes.at(axis);
-
+   }
    return 0;
 }
 
@@ -209,6 +269,19 @@ QString QJoysticks::getName(const int index)
 
    return "Invalid Joystick";
 }
+
+void QJoysticks::connectSocket()
+{
+    emit openSocket(m_hostName);
+}
+
+ void QJoysticks::setSwitchState(int switchNum, bool state)
+ {
+     if (switchNum>=0 && switchNum<m_gNumSwitches)
+     {
+         m_switchState[switchNum] = state;
+     }
+ }
 
 /**
  * Returns a pointer to the SDL joysticks system.
@@ -300,6 +373,70 @@ void QJoysticks::setBlacklisted(const int index, bool blacklisted)
    /* Re-scan joysticks if blacklist value has changed */
    if (changed)
       updateInterfaces();
+}
+
+// Status messages from socket thread
+void QJoysticks::handleStatusMsg(const QString &msg)
+{
+    QMetaObject::invokeMethod(m_log, "append",
+         Qt::DirectConnection,Q_ARG(QVariant, QVariant(msg)));
+}
+
+// Start or restart socket worker thread
+void QJoysticks::onHostNameChanged(QString name)
+{
+    emit openSocket(name);
+}
+
+// Called when socket state changed
+void QJoysticks::onSocketStateChanged(int state)
+{
+    QAbstractSocket::SocketState s = (QAbstractSocket::SocketState)state;
+    setSocketOpen(s==QAbstractSocket::SocketState::ConnectedState || s==QAbstractSocket::SocketState::ConnectingState);
+}
+
+// Sends joystick data to the remote host
+void QJoysticks::onSocketUpdate()
+{
+    // Protocol starts with 'B' (begin), num axis, ... axis values (servo style), E (end), checksum
+    QString status("B,");
+
+    int cnt = count();
+    for (int i=0; i<cnt; i++)
+    {
+        QJoystickDevice *dev = getInputDevice(i);
+        int numAxis = dev->axes.count();
+        status += QString::number(numAxis+m_gNumSwitches) + ",";
+        for (int axis =0; axis<numAxis; axis++)
+        {
+            double val = dev->axes[axis];
+            // Convert to integer values matching SBUS 0 to 2047
+            int uS = (int)(val * 800) + 992;
+            uS = uS > 1800 ? 1800 : uS;
+            status += QString::number(uS) + ",";
+        }
+
+        // Send software switch states
+        for (int switchNum=0; switchNum<m_gNumSwitches; switchNum++)
+        {
+            status += QString::number(m_switchState[switchNum] ? 2047 : 0) + ",";
+        }
+
+        status += "E,";
+
+        // Add a checksum
+        int cs = 0;
+        for (int j=0; j<status.count(); j++)
+        {
+            if (status.at(j)=='E') break;
+            cs+= status.at(j).toLatin1();
+        }
+
+        status += QString::number(cs);
+        break;
+    }
+
+    emit updateSocket(status);
 }
 
 /**

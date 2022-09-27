@@ -25,6 +25,8 @@
 #include <QApplication>
 #include <QStyleFactory>
 #include <QQmlApplicationEngine>
+#include <QQuickItem>
+#include <QQuickWindow>
 
 #include <QJoysticks.h>
 
@@ -85,7 +87,17 @@ int main(int argc, char *argv[])
    /*
     * Load main.qml and run the application.
     */
+
+
+   QObject* logObj=NULL;
    qmlEngine.load(QUrl(QStringLiteral("qrc:/main.qml")));
+
+   auto list = qmlEngine.rootObjects();
+   for (auto i : list) {
+     logObj=i->findChild<QObject*>("log");
+     if (logObj) break;
+   }
+   instance->setLog(logObj);
 
    return app.exec();
 }

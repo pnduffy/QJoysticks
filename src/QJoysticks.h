@@ -25,7 +25,10 @@
 
 #include <QObject>
 #include <QStringList>
+#include <QThread>
 #include <QJoysticks/JoysticksCommon.h>
+#include <QAbstractSocket>
+#include <QTimer>
 
 class QSettings;
 class SDL_Joysticks;
@@ -54,6 +57,8 @@ class QJoysticks : public QObject
    Q_PROPERTY(int count READ count NOTIFY countChanged)
    Q_PROPERTY(int nonBlacklistedCount READ nonBlacklistedCount NOTIFY countChanged)
    Q_PROPERTY(QStringList deviceNames READ deviceNames NOTIFY countChanged)
+   Q_PROPERTY(QString hostName READ getHostName WRITE setHostName NOTIFY hostNameChanged)
+   Q_PROPERTY(bool socketOpen READ getSocketOpen WRITE setSocketOpen NOTIFY socketOpenChanged)
 
    friend class Test_QJoysticks;
 
@@ -66,6 +71,10 @@ signals:
    void povChanged(const int js, const int pov, const int angle);
    void axisChanged(const int js, const int axis, const qreal value);
    void buttonChanged(const int js, const int button, const bool pressed);
+   void hostNameChanged(QString name);
+   void socketOpenChanged(bool val);
+   void openSocket(QString hostName);
+   void updateSocket(QString status);
 
 public:
    static QJoysticks *getInstance();
@@ -73,6 +82,11 @@ public:
    int count() const;
    int nonBlacklistedCount();
    QStringList deviceNames() const;
+   QString getHostName();
+   void setHostName(QString name);
+   bool getSocketOpen();
+   void setSocketOpen(bool val);
+   void setLog(QObject *obj) { m_log = obj; }
 
    Q_INVOKABLE int getPOV(const int index, const int pov);
    Q_INVOKABLE double getAxis(const int index, const int axis);
@@ -84,6 +98,8 @@ public:
    Q_INVOKABLE bool isBlacklisted(const int index);
    Q_INVOKABLE bool joystickExists(const int index);
    Q_INVOKABLE QString getName(const int index);
+   Q_INVOKABLE void connectSocket();
+   Q_INVOKABLE void setSwitchState(int switchNum, bool state);
 
    SDL_Joysticks *sdlJoysticks() const;
    VirtualJoystick *virtualJoystick() const;
@@ -97,6 +113,10 @@ public slots:
    void setVirtualJoystickAxisSensibility(qreal sensibility);
    void setSortJoysticksByBlacklistState(bool sort);
    void setBlacklisted(int index, bool blacklisted);
+   void handleStatusMsg(const QString &);
+   void onHostNameChanged(QString name);
+   void onSocketStateChanged(int state);
+   void onSocketUpdate();
 
 protected:
    explicit QJoysticks();
@@ -110,13 +130,20 @@ private slots:
    void onButtonEvent(const QJoystickButtonEvent &e);
 
 private:
+   const static int m_gNumSwitches = 1;
+
    bool m_sortJoyticks;
+   bool m_socketOpen;
+   bool m_switchState[m_gNumSwitches];
 
    QSettings *m_settings;
    SDL_Joysticks *m_sdlJoysticks;
    VirtualJoystick *m_virtualJoystick;
-
    QList<QJoystickDevice *> m_devices;
+   QString m_hostName;
+   QThread socketWorkerThread;
+   QObject *m_log;
+   QTimer m_socketUpdateTimer;
 };
 
 #endif

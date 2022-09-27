@@ -1,4 +1,6 @@
-# QJoysticks library
+# QJoysticks library for TCP/IP remote client/server
+
+This fork of QJosyticks adds support for transmitting the joystick values over a TCP/IP socket to a remote server. Useful for remote contolling joystick apps over the internet
 
 The QJoysticks library allows your Qt application to read input from both real joysticks/gamepads (using SDL) and a virtual joystick (using the keyboard).
 

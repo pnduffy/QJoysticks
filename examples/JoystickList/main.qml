@@ -33,14 +33,14 @@ ApplicationWindow {
     //
     // Window geometry
     //
-    width: 640
-    height: 480
+    minimumWidth: 400
+    minimumHeight: 700
 
     //
     // Other window properties
     //
     visible: true
-    title: qsTr ("QJoysticks Example")
+    title: qsTr ("QJoysticks Remote")
 
     //
     // Generates the axes, button and POV indicators when the user selects
@@ -49,8 +49,6 @@ ApplicationWindow {
     function generateJoystickWidgets (id) {
         /* Clear the joystick indicators */
         axes.model = 0
-        povs.model = 0
-        buttons.model = 0
 
         /* Change the current joystick id */
         currentJoystick = id
@@ -58,8 +56,6 @@ ApplicationWindow {
         /* Get current joystick information & generate indicators */
         if (QJoysticks.joystickExists (id)) {
             axes.model = QJoysticks.getNumAxes (id)
-            povs.model = QJoysticks.getNumPOVs (id)
-            buttons.model = QJoysticks.getNumButtons (id)
         }
 
         /* Resize window to minimum size */
@@ -86,16 +82,41 @@ ApplicationWindow {
             onCurrentTextChanged: generateJoystickWidgets (currentIndex)
         }
 
+        RowLayout
+        {
+            Layout.fillWidth: true
+            Text {
+                color: "white"
+                text: qsTr ("Host")
+            }
+
+            TextField {
+                id: hostName
+                Layout.fillWidth: true
+                text: QJoysticks.hostName
+                onEditingFinished: QJoysticks.hostName = text
+            }
+
+            Button {
+                text: qsTr("Connect")
+                enabled: true
+                onClicked: QJoysticks.connectSocket ()
+            }
+        }
+
         //
         // Axes indicator
         //
         GroupBox {
+            id: gb
             title: qsTr ("Axes")
             Layout.fillWidth: true
             Layout.fillHeight: true
 
             ColumnLayout {
-                spacing: 5
+                spacing: -5
+                anchors.left: parent.left
+                anchors.right: parent.right
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
@@ -104,18 +125,23 @@ ApplicationWindow {
                 //
                 Repeater {
                     id: axes
-                    delegate: ProgressBar {
+                    anchors.right: parent.right
+                    Layout.fillWidth: true
+                    delegate: ProgressBar
+                    {
                         id: progressbar
                         minimumValue: -100
                         maximumValue: 100
-                        Layout.fillWidth: true
+                        anchors.right: parent.right
+                        anchors.left: parent.left
+                        Layout.topMargin: 20
 
                         value: 0
-                        Behavior on value {NumberAnimation{}}
+                        //Behavior on value {NumberAnimation{}}
 
                         Connections {
                             target: QJoysticks
-                            onAxisChanged: {
+                            function onAxisChanged(js,axis,value) {
                                 if (currentJoystick === js && index === axis)
                                     progressbar.value = QJoysticks.getAxis (js, index) * 100
                             }
@@ -125,83 +151,30 @@ ApplicationWindow {
             }
         }
 
-        //
-        // Buttons indicator
-        //
         GroupBox {
-            title: qsTr ("Buttons")
+            title: qsTr ("Switches")
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            GridLayout {
-                rows: 6
-                rowSpacing: 5
-                columnSpacing: 5
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                flow: GridLayout.TopToBottom
-
-                //
-                // Generate a checkbox for each joystick button
-                //
-                Repeater {
-                    id: buttons
-                    delegate: CheckBox {
-                        enabled: false
-                        Layout.fillWidth: true
-                        text: qsTr ("Button %1").arg (index)
-
-                        //
-                        // React to QJoystick signals
-                        //
-                        Connections {
-                            target: QJoysticks
-                            onButtonChanged: {
-                                if (currentJoystick === js && button === index)
-                                    checked = QJoysticks.getButton (js, index)
-                            }
-                        }
-                    }
-                }
+            CheckBox {
+                id: switch1
+                text: "Switch 1"
+                onClicked: QJoysticks.setSwitchState(0,checked)
             }
         }
 
-        //
-        // POVs indicator
-        //
         GroupBox {
-            title: qsTr ("POVs")
+            title: qsTr ("Log")
             Layout.fillWidth: true
             Layout.fillHeight: true
-
-            ColumnLayout {
-                spacing: 5
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                //
-                // Generate a spinbox for each joystick POV
-                //
-                Repeater {
-                    id: povs
-                    delegate: SpinBox {
-                        enabled: false
-                        minimumValue: 0
-                        maximumValue: 360
-                        Layout.fillWidth: true
-
-                        //
-                        // React to QJoystick signals
-                        //
-                        Connections {
-                            target: QJoysticks
-                            onPovChanged: {
-                                if (currentJoystick === js && pov === index)
-                                    value = QJoysticks.getPOV (js, index)
-                            }
-                        }
-                    }
-                }
+            TextArea {
+                objectName: "log"
+                wrapMode: TextEdit.NoWrap
+                anchors.topMargin: 20
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                anchors.left: parent.left
             }
         }
     }
